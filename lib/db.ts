@@ -13,7 +13,7 @@ pool.on("error", err => {
   process.exit(-1);
 });
 
-export async function query(text: string, params?: unknown[]) {
-  const result = await pool.query(text, params);
+export async function query<T extends object = Record<string, unknown>>(text: string, params?: unknown[]): Promise<T[]> {
+  const result = await pool.query<T>(text, params);
   return result.rows;
 }

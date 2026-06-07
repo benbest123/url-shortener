@@ -4,7 +4,10 @@ import { NextRequest, NextResponse } from "next/server";
 export async function GET(req: NextRequest, { params }: { params: Promise<{ code: string }> }) {
   const { code } = await params;
 
-  const urlLookup = await query("SELECT original_url, expires_at FROM urls WHERE short_code = $1", [code]);
+  const urlLookup = await query<{ original_url: string; expires_at: Date | null }>(
+    "SELECT original_url, expires_at FROM urls WHERE short_code = $1",
+    [code],
+  );
 
   if (!urlLookup[0]) {
     return NextResponse.json({ error: "short code not found" }, { status: 404 });
