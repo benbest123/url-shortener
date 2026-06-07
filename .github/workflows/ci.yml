@@ -25,3 +25,26 @@ jobs:
 
       - name: Type check
         run: npx tsc --noEmit
+
+  test:
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 26
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests with coverage
+        run: npm run test:coverage
+
+      - name: Post coverage report to PR
+        uses: davelosert/vitest-coverage-report-action@v2
