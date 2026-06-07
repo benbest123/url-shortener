@@ -9,7 +9,7 @@ export default defineConfig({
     globals: true,
     coverage: {
       provider: "v8",
-      reporter: ["text", "json-summary", "lcov"],
+      reporter: ["text", "json-summary", "json", "lcov"],
       include: ["app/**", "lib/**"],
       exclude: ["**/*.test.ts"],
     },
