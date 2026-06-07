@@ -14,7 +14,7 @@ A full-stack link shortener with analytics. Next.js (App Router), TypeScript, Ta
 
 ## Current phase
 
-Phase 1 — hardcoded URL map, no database yet.
+Phase 3 — see PLAN.md
 
 ## Do not
 
