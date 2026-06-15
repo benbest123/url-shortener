@@ -10,3 +10,7 @@ export function generateShortCode(): string {
 
   return shortCode;
 }
+
+export function shortUrl(baseUrl: string, shortCode: string): string {
+  return `${baseUrl.replace(/\/$/, "")}/${shortCode}`;
+}

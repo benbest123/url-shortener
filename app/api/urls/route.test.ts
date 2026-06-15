@@ -2,7 +2,10 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { NextRequest } from "next/server";
 
 vi.mock("@/lib/db", () => ({ query: vi.fn() }));
-vi.mock("@/lib/utils", () => ({ generateShortCode: vi.fn(() => "abc1234") }));
+vi.mock("@/lib/utils", () => ({
+  generateShortCode: vi.fn(() => "abc1234"),
+  shortUrl: vi.fn((base: string, code: string) => `${base}/${code}`),
+}));
 
 import { POST } from "./route";
 import { query } from "@/lib/db";

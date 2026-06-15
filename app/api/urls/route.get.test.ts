@@ -1,5 +1,4 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { NextRequest } from "next/server";
 
 vi.mock("@/lib/db", () => ({ query: vi.fn() }));
 
@@ -11,13 +10,13 @@ const mockQuery = vi.mocked(query);
 describe("GET /api/urls", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    process.env.NEXT_PUBLIC_BASE_URL = "https://test.url";
   });
 
   it("returns an empty array when there are no URLs", async () => {
     mockQuery.mockResolvedValueOnce([]);
 
-    const req = new NextRequest("http://localhost/api/urls");
-    const res = await GET(req);
+    const res = await GET();
     const body = await res.json();
 
     expect(res.status).toBe(200);
@@ -41,13 +40,13 @@ describe("GET /api/urls", () => {
       },
     ]);
 
-    const req = new NextRequest("http://localhost/api/urls");
-    const res = await GET(req);
+    const res = await GET();
     const body = await res.json();
 
     expect(res.status).toBe(200);
     expect(body).toHaveLength(2);
     expect(body[0].shortCode).toBe("abc1234");
+    expect(body[0].shortUrl).toBe("https://test.url/abc1234");
     expect(body[0].originalUrl).toBe("https://example.com");
     expect(body[1].shortCode).toBe("xyz9999");
   });
@@ -63,8 +62,7 @@ describe("GET /api/urls", () => {
       },
     ]);
 
-    const req = new NextRequest("http://localhost/api/urls");
-    const res = await GET(req);
+    const res = await GET();
     const body = await res.json();
 
     expect(res.status).toBe(200);
@@ -74,11 +72,20 @@ describe("GET /api/urls", () => {
   it("returns 500 when the DB throws", async () => {
     mockQuery.mockRejectedValueOnce(new Error("db error"));
 
-    const req = new NextRequest("http://localhost/api/urls");
-    const res = await GET(req);
+    const res = await GET();
     const body = await res.json();
 
     expect(res.status).toBe(500);
     expect(body.error).toBe("failed to fetch URLs");
+  });
+
+  it("returns 500 when NEXT_PUBLIC_BASE_URL is not set", async () => {
+    delete process.env.NEXT_PUBLIC_BASE_URL;
+
+    const res = await GET();
+    const body = await res.json();
+
+    expect(res.status).toBe(500);
+    expect(body.error).toBe("server misconfiguration");
   });
 });

@@ -1,5 +1,5 @@
 import { query } from "@/lib/db";
-import { generateShortCode } from "@/lib/utils";
+import { generateShortCode, shortUrl } from "@/lib/utils";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
@@ -45,7 +45,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(
       {
         shortCode,
-        shortUrl: `${baseUrl.replace(/\/$/, "")}/${shortCode}`,
+        shortUrl: shortUrl(baseUrl, shortCode),
         originalUrl: url,
         createdAt: res[0].created_at,
         expiresAt: expiresAt ?? null,
@@ -58,4 +58,33 @@ export async function POST(req: NextRequest) {
   }
 }
 
-export async function GET(req: NextRequest) {}
+export async function GET() {
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
+  if (!baseUrl) {
+    console.error("NEXT_PUBLIC_BASE_URL is not set");
+    return NextResponse.json({ error: "server misconfiguration" }, { status: 500 });
+  }
+
+  try {
+    const rows = await query<{
+      short_code: string;
+      original_url: string;
+      created_at: Date;
+      expires_at: Date | null;
+    }>("SELECT short_code, original_url, created_at, expires_at FROM urls ORDER BY created_at DESC");
+
+    return NextResponse.json(
+      rows.map(row => ({
+        shortCode: row.short_code,
+        shortUrl: shortUrl(baseUrl, row.short_code),
+        originalUrl: row.original_url,
+        createdAt: row.created_at,
+        expiresAt: row.expires_at,
+      })),
+      { status: 200 },
+    );
+  } catch (err: unknown) {
+    console.error("Failed to fetch URLs", err);
+    return NextResponse.json({ error: "failed to fetch URLs" }, { status: 500 });
+  }
+}
