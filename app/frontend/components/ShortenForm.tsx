@@ -21,11 +21,13 @@ export default function ShortenForm({ onSuccess }: Props) {
 
     if (!response.ok) {
       setError("Failed to shorten URL. Please try again.");
+      setLongUrl("");
       return;
     }
     setError(null);
     const data = await response.json();
     onSuccess(data.shortUrl);
+    setLongUrl("");
   }
 
   return (
