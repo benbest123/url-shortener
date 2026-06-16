@@ -1,8 +1,15 @@
+CREATE TABLE users (
+   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+   email TEXT UNIQUE NOT NULL,
+   password_hash TEXT NOT NULL,
+   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 CREATE TABLE urls (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   short_code TEXT UNIQUE NOT NULL,
   original_url TEXT NOT NULL,
-  user_id UUID NULL,
+  user_id UUID REFERENCES users(id) ON DELETE CASCADE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   expires_at TIMESTAMPTZ NULL
 );
