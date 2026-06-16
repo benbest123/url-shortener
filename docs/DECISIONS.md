@@ -17,3 +17,15 @@
 **Date:** 6 June 2026
 **Decision:** We will use ON DELETE CASCADE on the click table FK so clicks are deleted if their url is deleted.
 **Reason:** clicks without url are orphaned data, probable case is user wants url and its data deleted
+
+## ADR 004 — include shortUrl in API responses rather than constructing it on the frontend
+
+**Date:** 15 June 2026
+**Decision:** Both `POST /api/urls` and `GET /api/urls` return a fully-formed `shortUrl` field computed server-side using `NEXT_PUBLIC_BASE_URL`.
+**Reason:** Makes the API self-contained — any consumer gets a ready-to-use URL without needing to know the base URL or construction logic. Tradeoff is that the server must have `NEXT_PUBLIC_BASE_URL` set, which is enforced with an explicit 500 guard on both routes.
+
+## ADR 005 — allow duplicate short codes for the same original URL
+
+**Date:** 15 June 2026
+**Decision:** No deduplication — submitting the same original URL multiple times creates a new short code each time.
+**Reason:** Simpler implementation (no pre-insert lookup), and the correct deduplication scope depends on auth (per-user vs global), which isn't in place until Phase 4. Revisit once users own their links.
