@@ -15,10 +15,16 @@ export default function Home() {
   }
 
   return (
-    <main className='min-h-screen bg-zinc-50 dark:bg-zinc-900'>
-      <ShortenForm onSuccess={handleSuccess} />
-      <LinkResult shortUrl={shortUrl} />
-      <LinkList key={refreshCount} />
+    <main className='min-h-screen bg-zinc-50'>
+      <div className='max-w-screen-lg mx-auto px-4 py-8 md:px-6 space-y-6'>
+        <div>
+          <h1 className='text-2xl font-semibold tracking-tight'>Snip</h1>
+          <p className='text-sm text-zinc-500'>Shorten any URL in one click</p>
+        </div>
+        <ShortenForm onSuccess={handleSuccess} />
+        <LinkResult shortUrl={shortUrl} />
+        <LinkList key={refreshCount} />
+      </div>
     </main>
   );
 }

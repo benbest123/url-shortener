@@ -20,7 +20,6 @@ Phase 3 — see PLAN.md
 
 ## Do not
 
-- Install new dependencies without being asked
 - Use `any` types
 - Add comments that just restate what the code does
 
