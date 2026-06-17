@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { cookies } from "next/headers";
 import { z } from "zod";
 import { query } from "@/lib/db";
-import jwt from "jsonwebtoken";
 import { hashPassword } from "@/lib/utils";
+import { setAuthCookie, signJwtToken } from "@/lib/auth";
 
 const userSchema = z.object({
   email: z.email(),
@@ -42,16 +41,8 @@ export async function POST(req: NextRequest) {
       hashedPassword,
     ]);
 
-    const jwtToken = jwt.sign({ user_id: res[0].id }, jwtSecret, { expiresIn: "24h" });
-    const cookieStore = await cookies();
-
-    cookieStore.set("auth_token", jwtToken, {
-      httpOnly: true,
-      secure: true,
-      sameSite: "strict",
-      maxAge: 60 * 60 * 24,
-      path: "/",
-    });
+    const jwtToken = signJwtToken(res[0].id, jwtSecret);
+    await setAuthCookie(jwtToken);
 
     return NextResponse.json({ success: true, message: "Registered successfully" }, { status: 201 });
   } catch (err: unknown) {
