@@ -24,7 +24,8 @@ const mockVerify = vi.mocked(jwt.verify);
 describe("lib/auth", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    process.env.JWT_SECRET = "test-secret";
+    vi.unstubAllEnvs();
+    vi.stubEnv("JWT_SECRET", "test-secret");
   });
 
   it("signJwtToken signs a token with expected payload and expiry", () => {
@@ -35,7 +36,7 @@ describe("lib/auth", () => {
   });
 
   it("setAuthCookie sets auth cookie with secure=false in non-production", async () => {
-    process.env.NODE_ENV = "test";
+    vi.stubEnv("NODE_ENV", "test");
 
     await setAuthCookie("jwt-token");
 
@@ -49,7 +50,7 @@ describe("lib/auth", () => {
   });
 
   it("setAuthCookie sets auth cookie with secure=true in production", async () => {
-    process.env.NODE_ENV = "production";
+    vi.stubEnv("NODE_ENV", "production");
 
     await setAuthCookie("jwt-token");
 
@@ -64,7 +65,7 @@ describe("lib/auth", () => {
 
   it("getUserIdFromCookie returns null when JWT secret is missing", () => {
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
-    delete process.env.JWT_SECRET;
+    vi.unstubAllEnvs();
 
     const req = new NextRequest("http://localhost", {
       headers: { cookie: "auth_token=token" },

@@ -16,7 +16,7 @@ import bcrypt from "bcryptjs";
 import { setAuthCookie, signJwtToken } from "@/lib/auth";
 
 const mockQuery = vi.mocked(query);
-const mockCompare = vi.mocked(bcrypt.compare);
+const mockCompare = vi.mocked(bcrypt.compare as (...args: [string, string]) => Promise<boolean>);
 const mockSignJwtToken = vi.mocked(signJwtToken);
 const mockSetAuthCookie = vi.mocked(setAuthCookie);
 
