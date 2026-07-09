@@ -64,7 +64,12 @@ export async function POST(req: NextRequest) {
   }
 }
 
-export async function GET() {
+export async function GET(req: NextRequest) {
+  const userId = getUserIdFromCookie(req);
+  if (!userId) {
+    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  }
+
   const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
   if (!baseUrl) {
     console.error("NEXT_PUBLIC_BASE_URL is not set");
@@ -77,7 +82,10 @@ export async function GET() {
       original_url: string;
       created_at: Date;
       expires_at: Date | null;
-    }>("SELECT short_code, original_url, created_at, expires_at FROM urls ORDER BY created_at DESC");
+    }>(
+      "SELECT short_code, original_url, created_at, expires_at FROM urls WHERE user_id = $1 ORDER BY created_at DESC",
+      [userId],
+    );
 
     return NextResponse.json(
       rows.map(row => ({
