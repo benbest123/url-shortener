@@ -16,7 +16,7 @@ vi.mock("next/headers", () => ({
 }));
 
 import jwt from "jsonwebtoken";
-import { getUserIdFromCookie, setAuthCookie, signJwtToken } from "./auth";
+import { clearAuthCookie, getUserIdFromCookie, setAuthCookie, signJwtToken } from "./auth";
 
 const mockSign = vi.mocked(jwt.sign);
 const mockVerify = vi.mocked(jwt.verify);
@@ -59,6 +59,20 @@ describe("lib/auth", () => {
       secure: true,
       sameSite: "strict",
       maxAge: 60 * 60 * 24,
+      path: "/",
+    });
+  });
+
+  it("clearAuthCookie expires the auth cookie", async () => {
+    vi.stubEnv("NODE_ENV", "test");
+
+    await clearAuthCookie();
+
+    expect(mockSet).toHaveBeenCalledWith("auth_token", "", {
+      httpOnly: true,
+      secure: false,
+      sameSite: "strict",
+      maxAge: 0,
       path: "/",
     });
   });

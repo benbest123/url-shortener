@@ -18,6 +18,18 @@ export async function setAuthCookie(jwtToken: string): Promise<void> {
   });
 }
 
+export async function clearAuthCookie(): Promise<void> {
+  const cookieStore = await cookies();
+
+  cookieStore.set("auth_token", "", {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "strict",
+    maxAge: 0,
+    path: "/",
+  });
+}
+
 export function getUserIdFromCookie(req: NextRequest): string | null {
   const jwtSecret = process.env.JWT_SECRET;
   if (!jwtSecret) {
