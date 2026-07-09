@@ -58,7 +58,7 @@ Build a frontend dashboard showing click counts over time, by device, by referre
 
 ## Phase 8 — Dockerise
 
-Wrap the app, Postgres, and Redis in Docker Compose so the whole thing runs with one command.
+Wrap the app, Postgres, and Redis in Docker Compose so the whole thing runs with one command. Add DB migrations.
 
 **Goal:** environment parity between local and production.
 

@@ -1,3 +1,5 @@
+import bcrypt from "bcryptjs";
+
 export function generateShortCode(): string {
   let shortCode = "";
   const alphabet = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
@@ -13,4 +15,10 @@ export function generateShortCode(): string {
 
 export function shortUrl(baseUrl: string, shortCode: string): string {
   return `${baseUrl.replace(/\/$/, "")}/${shortCode}`;
+}
+
+export async function hashPassword(plaintextPassword: string): Promise<string> {
+  const saltRounds = 10;
+  const hashedPassword = await bcrypt.hash(plaintextPassword, saltRounds);
+  return hashedPassword;
 }
