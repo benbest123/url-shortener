@@ -1,4 +1,5 @@
 import { query } from "@/lib/db";
+import { getUserIdFromCookie } from "@/lib/auth";
 import { generateShortCode, shortUrl } from "@/lib/utils";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
@@ -13,6 +14,11 @@ const UrlSchema = z.object({
 });
 
 export async function POST(req: NextRequest) {
+  const userId = getUserIdFromCookie(req);
+  if (!userId) {
+    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  }
+
   const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
   if (!baseUrl) {
     console.error("NEXT_PUBLIC_BASE_URL is not set");
@@ -38,8 +44,8 @@ export async function POST(req: NextRequest) {
 
   try {
     const res = await query<{ short_code: string; created_at: Date }>(
-      "INSERT INTO urls (short_code, original_url, expires_at) VALUES ($1, $2, $3) RETURNING short_code, created_at",
-      [shortCode, url, expiresAt],
+      "INSERT INTO urls (short_code, original_url, expires_at, user_id) VALUES ($1, $2, $3, $4) RETURNING short_code, created_at",
+      [shortCode, url, expiresAt, userId],
     );
 
     return NextResponse.json(
