@@ -6,16 +6,37 @@ vi.mock("@/lib/utils", () => ({
   generateShortCode: vi.fn(() => "abc1234"),
   shortUrl: vi.fn((base: string, code: string) => `${base}/${code}`),
 }));
+vi.mock("@/lib/auth", () => ({ getUserIdFromCookie: vi.fn() }));
 
 import { POST } from "./route";
 import { query } from "@/lib/db";
+import { getUserIdFromCookie } from "@/lib/auth";
 
 const mockQuery = vi.mocked(query);
+const mockGetUserIdFromCookie = vi.mocked(getUserIdFromCookie);
 
 describe("POST /api/urls", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     process.env.NEXT_PUBLIC_BASE_URL = "https://test.url";
+    mockGetUserIdFromCookie.mockReturnValue("user-1");
+  });
+
+  it("returns 401 when the request is unauthenticated", async () => {
+    mockGetUserIdFromCookie.mockReturnValue(null);
+
+    const req = new NextRequest("http://localhost/api/urls", {
+      method: "POST",
+      body: JSON.stringify({ url: "https://example.com" }),
+      headers: { "Content-Type": "application/json" },
+    });
+
+    const res = await POST(req);
+    const body = await res.json();
+
+    expect(res.status).toBe(401);
+    expect(body.error).toBe("unauthorized");
+    expect(mockQuery).not.toHaveBeenCalled();
   });
 
   it("returns 400 for an invalid URL", async () => {
@@ -77,6 +98,10 @@ describe("POST /api/urls", () => {
       createdAt: createdAt.toISOString(),
       expiresAt: null,
     });
+    expect(mockQuery).toHaveBeenCalledWith(
+      "INSERT INTO urls (short_code, original_url, expires_at, user_id) VALUES ($1, $2, $3, $4) RETURNING short_code, created_at",
+      ["abc1234", "https://example.com", undefined, "user-1"],
+    );
   });
 
   it("includes expiresAt in the response when provided", async () => {

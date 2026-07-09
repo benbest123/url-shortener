@@ -29,3 +29,10 @@
 **Date:** 15 June 2026
 **Decision:** No deduplication — submitting the same original URL multiple times creates a new short code each time.
 **Reason:** Simpler implementation (no pre-insert lookup), and the correct deduplication scope depends on auth (per-user vs global), which isn't in place until Phase 4. Revisit once users own their links.
+
+## ADR 006 — require authentication to create and list links
+
+**Date:** 10 July 2026
+**Decision:** The URL routes require a valid auth cookie. `POST /api/urls` rejects unauthenticated requests with 401 and stores the caller's `user_id` on every link; `GET /api/urls` returns only the caller's own links. Every link has exactly one owner.
+**Reason:** Ownership stays unambiguous, which keeps list scoping (`WHERE user_id = $1`), deletion, and per-user analytics (Phase 7) simple. Directly satisfies the Phase 4 goal that links are owned by a user.
+**Alternative rejected — anonymous links** (nullable `user_id`, auth optional): matches how real-world shorteners (bitly, tinyurl) work and removes signup friction on the core action, but `GET` has no coherent answer for an anonymous caller, orphan links accumulate with no one able to manage them, abuse control shifts to harder IP-based rate limiting, and "claim my anonymous links after signing up" becomes a non-trivial feature. We deliberately chose the simpler, ownership-clean model and deferred anonymous/claiming as out of scope. The schema keeps `user_id` nullable so this can be revisited without a migration.
