@@ -36,3 +36,29 @@
 **Decision:** The URL routes require a valid auth cookie. `POST /api/urls` rejects unauthenticated requests with 401 and stores the caller's `user_id` on every link; `GET /api/urls` returns only the caller's own links. Every link has exactly one owner.
 **Reason:** Ownership stays unambiguous, which keeps list scoping (`WHERE user_id = $1`), deletion, and per-user analytics (Phase 7) simple. Directly satisfies the Phase 4 goal that links are owned by a user.
 **Alternative rejected — anonymous links** (nullable `user_id`, auth optional): matches how real-world shorteners (bitly, tinyurl) work and removes signup friction on the core action, but `GET` has no coherent answer for an anonymous caller, orphan links accumulate with no one able to manage them, abuse control shifts to harder IP-based rate limiting, and "claim my anonymous links after signing up" becomes a non-trivial feature. We deliberately chose the simpler, ownership-clean model and deferred anonymous/claiming as out of scope. The schema keeps `user_id` nullable so this can be revisited without a migration.
+
+## ADR 007 — normalize emails to lowercase
+
+**Date:** 14 July 2026
+**Decision:** Both register and login lowercase the email (via the Zod schema) before storing or querying. Accounts are therefore case-insensitive on email.
+**Reason:** The `users.email` column is a case-sensitive `TEXT UNIQUE`. Without normalization, `Bob@x.com` and `bob@x.com` register as two distinct accounts, and a user who logs in with different casing than they signed up with fails auth despite valid credentials. Lowercasing at the edge keeps the stored value canonical.
+**Enforcement:** Backed at the DB layer by a functional unique index, `CREATE UNIQUE INDEX users_email_lower_key ON users (lower(email))`, so no mixed-case duplicate can slip in via a code path that skips the Zod transform (scripts, imports, future signup flows). App-level lowercasing is kept because it canonicalizes the stored value and lets the exact-match login lookup (`WHERE email = $1`) use the existing `users_email_key` index. Chose the functional index over a `CITEXT` column type as the lighter change (no extension, no column-type migration).
+**Consequence / migration note:** Existing rows are assumed already-lowercase (the DB predates this change and had no real accounts). If mixed-case rows ever exist, a one-off `UPDATE users SET email = lower(email)` (plus dedup of any collisions) is required before the unique index can be created.
+
+## ADR 008 — only accept http(s) URLs for shortening
+
+**Date:** 14 July 2026
+**Decision:** `POST /api/urls` validates that the submitted URL's scheme is `http:` or `https:`, rejecting everything else (`javascript:`, `data:`, `file:`, `ftp:`, …) with a 400.
+**Reason:** `z.url()` accepts any valid-URI scheme, which the redirect handler would then emit as a `Location`. Browsers won't execute `javascript:`/`data:` from a redirect, so this is not XSS, but a link shortener has no reason to store and serve arbitrary schemes, and doing so is a needless abuse surface. An allowlist is the conservative default.
+
+## ADR 009 — retry short-code generation on collision
+
+**Date:** 14 July 2026
+**Decision:** On a `short_code` UNIQUE violation (`23505`), `POST /api/urls` retries with a freshly generated code, up to 5 attempts, before returning a 500.
+**Reason:** Codes are random (7 chars over a 62-char alphabet), so collisions are astronomically rare, but a collision is a transient, retryable condition — not a server error. Retrying turns a would-be 500 into a successful create. The attempt cap bounds the work and still surfaces a genuine, persistent failure. Relates to ADR 002 (random codes) and ADR 005 (no dedup — the same original URL may legitimately map to many codes).
+
+## ADR 010 — auth hardening: constant-time login, algorithm pinning, misconfig as 500
+
+**Date:** 14 July 2026
+**Decision:** (a) Login always runs a bcrypt compare — against a dummy hash when the email is unknown — so response latency does not reveal whether an account exists. (b) `jwt.verify` pins `algorithms: ["HS256"]`. (c) A missing `JWT_SECRET` is treated as a 500 (server misconfiguration) everywhere, including the auth-guarded routes, rather than a silent 401.
+**Reason:** Closes a user-enumeration timing side-channel on login, removes JWT algorithm-confusion as a class of risk, and makes a misconfigured deploy fail loudly and consistently instead of masquerading as "everyone is logged out." Note the register route's `409 "email already in use"` still leaks account existence directly; that is accepted for now as the cost of a usable signup error, and revisiting it (e.g. generic messaging + email verification) is out of scope.

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { NextRequest } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 
 vi.mock("jsonwebtoken", () => ({
   default: {
@@ -16,7 +16,7 @@ vi.mock("next/headers", () => ({
 }));
 
 import jwt from "jsonwebtoken";
-import { clearAuthCookie, getUserIdFromCookie, setAuthCookie, signJwtToken } from "./auth";
+import { clearAuthCookie, requireJwtSecret, requireUserId, setAuthCookie, signJwtToken } from "./auth";
 
 const mockSign = vi.mocked(jwt.sign);
 const mockVerify = vi.mocked(jwt.verify);
@@ -28,11 +28,11 @@ describe("lib/auth", () => {
     vi.stubEnv("JWT_SECRET", "test-secret");
   });
 
-  it("signJwtToken signs a token with expected payload and expiry", () => {
+  it("signJwtToken signs a token with expected payload, expiry, and algorithm", () => {
     const token = signJwtToken("user-1", "secret");
 
     expect(token).toBe("signed-token");
-    expect(mockSign).toHaveBeenCalledWith({ user_id: "user-1" }, "secret", { expiresIn: "24h" });
+    expect(mockSign).toHaveBeenCalledWith({ user_id: "user-1" }, "secret", { expiresIn: "24h", algorithm: "HS256" });
   });
 
   it("setAuthCookie sets auth cookie with secure=false in non-production", async () => {
@@ -77,7 +77,23 @@ describe("lib/auth", () => {
     });
   });
 
-  it("getUserIdFromCookie returns null when JWT secret is missing", () => {
+  it("requireJwtSecret returns the secret when set", () => {
+    expect(requireJwtSecret()).toBe("test-secret");
+  });
+
+  it("requireJwtSecret returns a 500 response when the secret is missing", () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    vi.unstubAllEnvs();
+
+    const result = requireJwtSecret();
+
+    expect(result).toBeInstanceOf(NextResponse);
+    expect((result as NextResponse).status).toBe(500);
+    expect(errorSpy).toHaveBeenCalled();
+    errorSpy.mockRestore();
+  });
+
+  it("requireUserId returns a 500 response when JWT secret is missing", () => {
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
     vi.unstubAllEnvs();
 
@@ -85,35 +101,36 @@ describe("lib/auth", () => {
       headers: { cookie: "auth_token=token" },
     });
 
-    const userId = getUserIdFromCookie(req);
+    const result = requireUserId(req);
 
-    expect(userId).toBeNull();
-    expect(errorSpy).toHaveBeenCalled();
+    expect(result).toBeInstanceOf(NextResponse);
+    expect((result as NextResponse).status).toBe(500);
     errorSpy.mockRestore();
   });
 
-  it("getUserIdFromCookie returns null when auth cookie is absent", () => {
+  it("requireUserId returns a 401 response when auth cookie is absent", () => {
     const req = new NextRequest("http://localhost");
 
-    const userId = getUserIdFromCookie(req);
+    const result = requireUserId(req);
 
-    expect(userId).toBeNull();
+    expect(result).toBeInstanceOf(NextResponse);
+    expect((result as NextResponse).status).toBe(401);
   });
 
-  it("getUserIdFromCookie returns user id when token verifies", () => {
+  it("requireUserId returns the user id when token verifies, pinning the algorithm", () => {
     mockVerify.mockReturnValueOnce({ user_id: "user-1" } as never);
 
     const req = new NextRequest("http://localhost", {
       headers: { cookie: "auth_token=token" },
     });
 
-    const userId = getUserIdFromCookie(req);
+    const result = requireUserId(req);
 
-    expect(userId).toBe("user-1");
-    expect(mockVerify).toHaveBeenCalledWith("token", "test-secret");
+    expect(result).toBe("user-1");
+    expect(mockVerify).toHaveBeenCalledWith("token", "test-secret", { algorithms: ["HS256"] });
   });
 
-  it("getUserIdFromCookie returns null when token verification throws", () => {
+  it("requireUserId returns a 401 response when token verification throws", () => {
     mockVerify.mockImplementationOnce(() => {
       throw new Error("invalid token");
     });
@@ -122,8 +139,9 @@ describe("lib/auth", () => {
       headers: { cookie: "auth_token=bad" },
     });
 
-    const userId = getUserIdFromCookie(req);
+    const result = requireUserId(req);
 
-    expect(userId).toBeNull();
+    expect(result).toBeInstanceOf(NextResponse);
+    expect((result as NextResponse).status).toBe(401);
   });
 });

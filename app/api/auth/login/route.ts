@@ -1,30 +1,23 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { query } from "@/lib/db";
-import bcrypt from "bcryptjs";
-import { setAuthCookie, signJwtToken } from "@/lib/auth";
+import { DUMMY_PASSWORD_HASH, verifyPassword } from "@/lib/utils";
+import { requireJwtSecret, setAuthCookie, signJwtToken } from "@/lib/auth";
+import { parseJsonBody } from "@/lib/http";
 
 const userSchema = z.object({
-  email: z.email(),
+  email: z.email().transform(email => email.toLowerCase()),
   password: z.string().min(1),
 });
 
 export async function POST(req: NextRequest) {
-  const jwtSecret = process.env.JWT_SECRET;
-  if (!jwtSecret) {
-    console.error("JWT_SECRET is not set");
-    return NextResponse.json({ error: "server misconfiguration" }, { status: 500 });
-  }
+  const jwtSecret = requireJwtSecret();
+  if (jwtSecret instanceof NextResponse) return jwtSecret;
 
-  let body: unknown;
-  try {
-    body = await req.json();
-  } catch {
-    return NextResponse.json({ error: "invalid JSON body" }, { status: 400 });
-  }
+  const body = await parseJsonBody(req);
+  if (body instanceof NextResponse) return body;
 
   const parsed = userSchema.safeParse(body);
-
   if (!parsed.success) {
     return NextResponse.json({ error: "invalid email or password" }, { status: 400 });
   }
@@ -37,20 +30,20 @@ export async function POST(req: NextRequest) {
       [email],
     );
 
-    if (res.length === 0) {
+    // Always run a bcrypt compare — against a dummy hash when the user is
+    // absent — so timing does not reveal whether the email is registered.
+    const user = res[0];
+    const passwordsMatch = await verifyPassword(parsed.data.password, user?.password_hash ?? DUMMY_PASSWORD_HASH);
+
+    if (!user || !passwordsMatch) {
       return NextResponse.json({ error: "invalid email or password" }, { status: 401 });
     }
 
-    const passwordsMatch = await bcrypt.compare(parsed.data.password, res[0].password_hash);
-    if (!passwordsMatch) {
-      return NextResponse.json({ error: "invalid email or password" }, { status: 401 });
-    }
-
-    const jwtToken = signJwtToken(res[0].id, jwtSecret);
+    const jwtToken = signJwtToken(user.id, jwtSecret);
     await setAuthCookie(jwtToken);
 
     return NextResponse.json({ success: true, message: "Logged in successfully" }, { status: 200 });
-  } catch (err: unknown) {
+  } catch (err) {
     console.error("Failed to find user", err);
     return NextResponse.json({ error: "failed to find user" }, { status: 500 });
   }

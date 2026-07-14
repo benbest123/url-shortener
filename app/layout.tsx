@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "URL Shortener",
+  title: "Snip",
 };
 
 export default function RootLayout({

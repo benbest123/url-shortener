@@ -1,12 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { query } from "@/lib/db";
-import { getUserIdFromCookie } from "@/lib/auth";
+import { requireUserId } from "@/lib/auth";
 
 export async function GET(req: NextRequest) {
-  const userId = getUserIdFromCookie(req);
-  if (!userId) {
-    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  }
+  const userId = requireUserId(req);
+  if (userId instanceof NextResponse) return userId;
 
   try {
     const rows = await query<{ email: string }>("SELECT email FROM users WHERE id = $1", [userId]);

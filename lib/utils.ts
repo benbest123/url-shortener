@@ -1,13 +1,24 @@
 import bcrypt from "bcryptjs";
 
-export function generateShortCode(): string {
-  let shortCode = "";
-  const alphabet = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-  const bytes = new Uint8Array(7);
-  crypto.getRandomValues(bytes);
+const SHORT_CODE_ALPHABET = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+const SHORT_CODE_LENGTH = 7;
 
-  for (const i of bytes) {
-    shortCode += alphabet[i % alphabet.length];
+export function generateShortCode(): string {
+  // Rejection sampling: 256 is not a multiple of 62, so a plain `byte % 62`
+  // over-weights the first (256 % 62 = 8) indices. Discard bytes in that tail
+  // so every character is uniformly distributed.
+  const cutoff = Math.floor(256 / SHORT_CODE_ALPHABET.length) * SHORT_CODE_ALPHABET.length;
+  let shortCode = "";
+
+  while (shortCode.length < SHORT_CODE_LENGTH) {
+    const bytes = new Uint8Array(SHORT_CODE_LENGTH);
+    crypto.getRandomValues(bytes);
+
+    for (const byte of bytes) {
+      if (byte >= cutoff) continue;
+      shortCode += SHORT_CODE_ALPHABET[byte % SHORT_CODE_ALPHABET.length];
+      if (shortCode.length === SHORT_CODE_LENGTH) break;
+    }
   }
 
   return shortCode;
@@ -57,3 +68,14 @@ export async function hashPassword(plaintextPassword: string): Promise<string> {
   const hashedPassword = await bcrypt.hash(plaintextPassword, saltRounds);
   return hashedPassword;
 }
+
+export async function verifyPassword(plaintextPassword: string, passwordHash: string): Promise<boolean> {
+  return bcrypt.compare(plaintextPassword, passwordHash);
+}
+
+/**
+ * A throwaway bcrypt hash used to equalize timing on the login miss path: when
+ * no user matches, we still run a compare against this so response latency does
+ * not reveal whether an email is registered.
+ */
+export const DUMMY_PASSWORD_HASH = bcrypt.hashSync("dummy-password-for-constant-time-compare", 10);

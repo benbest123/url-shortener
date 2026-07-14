@@ -2,10 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { query } from "@/lib/db";
 import { hashPassword } from "@/lib/utils";
-import { setAuthCookie, signJwtToken } from "@/lib/auth";
+import { requireJwtSecret, setAuthCookie, signJwtToken } from "@/lib/auth";
+import { parseJsonBody } from "@/lib/http";
 
 const userSchema = z.object({
-  email: z.email(),
+  email: z.email().transform(email => email.toLowerCase()),
   password: z
     .string()
     .min(8, { message: "Password must be at least 8 characters long" })
@@ -13,21 +14,13 @@ const userSchema = z.object({
 });
 
 export async function POST(req: NextRequest) {
-  const jwtSecret = process.env.JWT_SECRET;
-  if (!jwtSecret) {
-    console.error("JWT_SECRET is not set");
-    return NextResponse.json({ error: "server misconfiguration" }, { status: 500 });
-  }
+  const jwtSecret = requireJwtSecret();
+  if (jwtSecret instanceof NextResponse) return jwtSecret;
 
-  let body: unknown;
-  try {
-    body = await req.json();
-  } catch {
-    return NextResponse.json({ error: "invalid JSON body" }, { status: 400 });
-  }
+  const body = await parseJsonBody(req);
+  if (body instanceof NextResponse) return body;
 
   const parsed = userSchema.safeParse(body);
-
   if (!parsed.success) {
     return NextResponse.json({ error: z.treeifyError(parsed.error) }, { status: 400 });
   }
@@ -45,7 +38,7 @@ export async function POST(req: NextRequest) {
     await setAuthCookie(jwtToken);
 
     return NextResponse.json({ success: true, message: "Registered successfully" }, { status: 201 });
-  } catch (err: unknown) {
+  } catch (err) {
     if ((err as { code?: string }).code === "23505") {
       return NextResponse.json({ error: "email already in use" }, { status: 409 });
     }

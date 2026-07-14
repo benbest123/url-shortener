@@ -3,7 +3,8 @@ import { NextRequest } from "next/server";
 
 vi.mock("@/lib/db", () => ({ query: vi.fn() }));
 vi.mock("@/lib/utils", () => ({ hashPassword: vi.fn() }));
-vi.mock("@/lib/auth", () => ({
+vi.mock("@/lib/auth", async importOriginal => ({
+  ...(await importOriginal<typeof import("@/lib/auth")>()),
   signJwtToken: vi.fn(() => "jwt-token"),
   setAuthCookie: vi.fn(),
 }));
@@ -89,6 +90,23 @@ describe("POST /api/auth/register", () => {
     ]);
     expect(mockSignJwtToken).toHaveBeenCalledWith("user-1", "test-secret");
     expect(mockSetAuthCookie).toHaveBeenCalledWith("jwt-token");
+  });
+
+  it("normalizes the email to lowercase before storing", async () => {
+    mockQuery.mockResolvedValueOnce([{ id: "user-1" }]);
+
+    const req = new NextRequest("http://localhost/api/auth/register", {
+      method: "POST",
+      body: JSON.stringify({ email: "Test@Example.COM", password: "Password!1" }),
+      headers: { "Content-Type": "application/json" },
+    });
+
+    await POST(req);
+
+    expect(mockQuery).toHaveBeenCalledWith("INSERT INTO users (email, password_hash) VALUES ($1, $2) RETURNING id", [
+      "test@example.com",
+      "hashed-password",
+    ]);
   });
 
   it("returns 409 when email already exists", async () => {

@@ -1,15 +1,15 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { NextRequest } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 
 vi.mock("@/lib/db", () => ({ query: vi.fn() }));
-vi.mock("@/lib/auth", () => ({ getUserIdFromCookie: vi.fn() }));
+vi.mock("@/lib/auth", () => ({ requireUserId: vi.fn() }));
 
 import { GET } from "./route";
 import { query } from "@/lib/db";
-import { getUserIdFromCookie } from "@/lib/auth";
+import { requireUserId } from "@/lib/auth";
 
 const mockQuery = vi.mocked(query);
-const mockGetUserIdFromCookie = vi.mocked(getUserIdFromCookie);
+const mockRequireUserId = vi.mocked(requireUserId);
 
 const req = new NextRequest("http://localhost/api/urls");
 
@@ -17,11 +17,11 @@ describe("GET /api/urls", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     process.env.NEXT_PUBLIC_BASE_URL = "https://test.url";
-    mockGetUserIdFromCookie.mockReturnValue("user-1");
+    mockRequireUserId.mockReturnValue("user-1");
   });
 
   it("returns 401 when the request is unauthenticated", async () => {
-    mockGetUserIdFromCookie.mockReturnValue(null);
+    mockRequireUserId.mockReturnValue(NextResponse.json({ error: "unauthorized" }, { status: 401 }));
 
     const res = await GET(req);
     const body = await res.json();

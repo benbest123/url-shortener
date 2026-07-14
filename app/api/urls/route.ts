@@ -1,11 +1,14 @@
 import { query } from "@/lib/db";
-import { getUserIdFromCookie } from "@/lib/auth";
+import { requireUserId } from "@/lib/auth";
+import { parseJsonBody, requireBaseUrl } from "@/lib/http";
 import { generateShortCode, shortUrl } from "@/lib/utils";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
+const MAX_SHORT_CODE_ATTEMPTS = 5;
+
 const UrlSchema = z.object({
-  url: z.url(),
+  url: z.url().refine(isHttpUrl, { message: "url must use http or https" }),
   expiresAt: z.optional(
     z.iso.datetime().refine(val => new Date(val) > new Date(), {
       message: "expiresAt must be in the future",
@@ -13,68 +16,71 @@ const UrlSchema = z.object({
   ),
 });
 
-export async function POST(req: NextRequest) {
-  const userId = getUserIdFromCookie(req);
-  if (!userId) {
-    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  }
-
-  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
-  if (!baseUrl) {
-    console.error("NEXT_PUBLIC_BASE_URL is not set");
-    return NextResponse.json({ error: "server misconfiguration" }, { status: 500 });
-  }
-
-  let body: unknown;
+function isHttpUrl(value: string): boolean {
   try {
-    body = await req.json();
+    const { protocol } = new URL(value);
+    return protocol === "http:" || protocol === "https:";
   } catch {
-    return NextResponse.json({ error: "invalid JSON body" }, { status: 400 });
+    return false;
   }
+}
+
+export async function POST(req: NextRequest) {
+  const userId = requireUserId(req);
+  if (userId instanceof NextResponse) return userId;
+
+  const baseUrl = requireBaseUrl();
+  if (baseUrl instanceof NextResponse) return baseUrl;
+
+  const body = await parseJsonBody(req);
+  if (body instanceof NextResponse) return body;
 
   const parsed = UrlSchema.safeParse(body);
-
   if (!parsed.success) {
     return NextResponse.json({ error: "invalid url or expiration date" }, { status: 400 });
   }
 
   const { url, expiresAt } = parsed.data;
 
-  const shortCode = generateShortCode();
+  // Retry on the (rare) short_code UNIQUE collision with a fresh code rather
+  // than surfacing it as a 500.
+  for (let attempt = 0; attempt < MAX_SHORT_CODE_ATTEMPTS; attempt++) {
+    const shortCode = generateShortCode();
+    try {
+      const res = await query<{ short_code: string; created_at: Date }>(
+        "INSERT INTO urls (short_code, original_url, expires_at, user_id) VALUES ($1, $2, $3, $4) RETURNING short_code, created_at",
+        [shortCode, url, expiresAt, userId],
+      );
 
-  try {
-    const res = await query<{ short_code: string; created_at: Date }>(
-      "INSERT INTO urls (short_code, original_url, expires_at, user_id) VALUES ($1, $2, $3, $4) RETURNING short_code, created_at",
-      [shortCode, url, expiresAt, userId],
-    );
-
-    return NextResponse.json(
-      {
-        shortCode,
-        shortUrl: shortUrl(baseUrl, shortCode),
-        originalUrl: url,
-        createdAt: res[0].created_at,
-        expiresAt: expiresAt ?? null,
-      },
-      { status: 201 },
-    );
-  } catch (err: unknown) {
-    console.error("Failed to insert URL", err);
-    return NextResponse.json({ error: "failed to create short URL" }, { status: 500 });
+      return NextResponse.json(
+        {
+          shortCode,
+          shortUrl: shortUrl(baseUrl, shortCode),
+          originalUrl: url,
+          createdAt: res[0].created_at,
+          expiresAt: expiresAt ?? null,
+        },
+        { status: 201 },
+      );
+    } catch (err) {
+      if ((err as { code?: string }).code === "23505") {
+        continue;
+      }
+      console.error("Failed to insert URL", err);
+      return NextResponse.json({ error: "failed to create short URL" }, { status: 500 });
+    }
   }
+
+  console.error(`Failed to generate a unique short code after ${MAX_SHORT_CODE_ATTEMPTS} attempts`);
+  return NextResponse.json({ error: "failed to create short URL" }, { status: 500 });
 }
 
 export async function GET(req: NextRequest) {
-  const userId = getUserIdFromCookie(req);
-  if (!userId) {
-    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  }
+  const userId = requireUserId(req);
+  if (userId instanceof NextResponse) return userId;
 
-  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
-  if (!baseUrl) {
-    console.error("NEXT_PUBLIC_BASE_URL is not set");
-    return NextResponse.json({ error: "server misconfiguration" }, { status: 500 });
-  }
+  const baseUrl = requireBaseUrl();
+  if (baseUrl instanceof NextResponse) return baseUrl;
 
   try {
     const rows = await query<{
@@ -97,7 +103,7 @@ export async function GET(req: NextRequest) {
       })),
       { status: 200 },
     );
-  } catch (err: unknown) {
+  } catch (err) {
     console.error("Failed to fetch URLs", err);
     return NextResponse.json({ error: "failed to fetch URLs" }, { status: 500 });
   }

@@ -5,6 +5,11 @@ CREATE TABLE users (
    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- Enforce case-insensitive email uniqueness at the DB layer (ADR 007). The app
+-- lowercases emails before writing, but this guarantees no mixed-case duplicate
+-- can slip in through any other code path (scripts, imports, future signup flows).
+CREATE UNIQUE INDEX users_email_lower_key ON users (lower(email));
+
 CREATE TABLE urls (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   short_code TEXT UNIQUE NOT NULL,
