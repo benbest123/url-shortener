@@ -1,36 +1,114 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Snip
 
-## Getting Started
+[![codecov](https://codecov.io/gh/benbest123/url-shortener/graph/badge.svg)](https://codecov.io/gh/benbest123/url-shortener)
 
-First, run the development server:
+A URL shortener. Paste a long link, get a short one back; visiting the short link
+redirects you. Behind a login, so links are owned by whoever created them.
+
+This is a learning project, built up in phases (see [`docs/PLAN.md`](docs/PLAN.md)) to
+work through a full stack end to end — HTTP redirects, a real database with hand-written
+SQL, auth, and eventually caching and analytics. The emphasis is on understanding each
+piece rather than reaching for a framework that hides it.
+
+![Snip — shortening a URL and the list of saved links](docs/images/home.png)
+
+## Stack
+
+- **Next.js** (App Router) + **React** + **TypeScript**
+- **PostgreSQL** via [`pg`](https://node-postgres.com/) — raw SQL, no ORM
+- **Zod** for input validation
+- **JWT** auth in an httpOnly cookie, passwords hashed with `bcryptjs`
+- **Tailwind** for styling
+- **Vitest** for tests
+
+## Local setup
+
+You'll need Node and a PostgreSQL server running locally.
+
+1. **Install dependencies**
+
+   ```bash
+   npm install
+   ```
+
+2. **Create the database and load the schema**
+
+   ```bash
+   createdb url_shortener
+   psql url_shortener < db/schema.sql
+   ```
+
+3. **Set environment variables** — create a `.env` file in the project root:
+
+   ```bash
+   # Postgres connection string (adjust user/host to match your setup)
+   DATABASE_URL=postgres://localhost:5432/url_shortener
+
+   # Secret used to sign JWTs — use a long random string
+   JWT_SECRET=your-secret-here
+
+   # Base URL used to build the returned short links.
+   # Required — the URL routes return 500 if it's unset.
+   NEXT_PUBLIC_BASE_URL=http://localhost:3000
+   ```
+
+4. **Run it**
+
+   ```bash
+   npm run dev
+   ```
+
+   Open [http://localhost:3000](http://localhost:3000), register an account, and shorten a link.
+
+## Tests
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm test              # run once
+npm run test:watch    # watch mode
+npm run test:coverage # with coverage
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+The project follows red-green TDD — tests come before implementation.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Architecture
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+A quick tour of how a request flows through the app:
 
-## Learn More
+- **Redirects** live in `app/[code]/route.ts` — a route handler (not a page), since a
+  redirect is a pure HTTP response with no UI. It looks the code up in Postgres, checks
+  expiry, and returns a 302.
+- **The API** is a handful of route handlers under `app/api/` — auth (`register`, `login`,
+  `logout`, `me`) and links (`POST`/`GET /api/urls`). Every route validates its input with
+  Zod and talks to the database through the thin `query()` helper in `lib/db.ts`.
+- **Auth** is a signed JWT stored in an httpOnly, sameSite cookie. `lib/auth.ts` owns
+  signing, cookie handling, and the `requireUserId` guard that the protected routes use.
+- **The frontend** (`app/` pages + `app/frontend/components/`) is a small React UI that
+  calls the same API.
 
-To learn more about Next.js, take a look at the following resources:
+Data lives in three tables — `users`, `urls`, and `clicks` (see `db/schema.sql`). Short
+codes are random 7-character strings.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Design decisions and the reasoning behind them are recorded as ADRs in
+[`docs/DECISIONS.md`](docs/DECISIONS.md) — worth reading before changing the data model or
+API shape.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Roadmap
 
-## Deploy on Vercel
+Built so far: core redirects, the Postgres data model, creating and listing links, and
+user auth.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Planned, roughly in order:
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- **Click tracking** — record device, referrer, and timestamp on each redirect,
+  asynchronously so it doesn't slow the redirect down.
+- **Caching** — Redis in front of Postgres for redirect lookups (read-heavy workload).
+- **Analytics dashboard** — click counts over time, by device and referrer.
+- **Dockerise** — app + Postgres + Redis via Docker Compose, plus DB migrations.
+- **Deploy** — a real host behind Nginx with HTTPS.
+- **CI/CD** — currently tests and coverage run on PRs; extend to auto-deploy on merge.
+
+Full detail in [`docs/PLAN.md`](docs/PLAN.md).
+
+## License
+
+[MIT](LICENSE)
