@@ -1,6 +1,12 @@
 import { describe, it, expect } from "vitest";
 import bcrypt from "bcryptjs";
-import { extractApiErrorMessage, generateShortCode, hashPassword, verifyPassword } from "./utils";
+import {
+  extractApiErrorMessage,
+  generateShortCode,
+  hashPassword,
+  validateUrlToShorten,
+  verifyPassword,
+} from "./utils";
 
 describe("generateShortCode", () => {
   it("returns a string of length 7", () => {
@@ -32,6 +38,31 @@ describe("generateShortCode", () => {
     // With uniform sampling the spread stays modest; the old `% 62` bias made
     // a-h ~25% more likely, which this bound would catch.
     expect(max / min).toBeLessThan(1.5);
+  });
+});
+
+describe("validateUrlToShorten", () => {
+  it("returns null for a valid http(s) URL", () => {
+    expect(validateUrlToShorten("https://example.com/path")).toBeNull();
+    expect(validateUrlToShorten("http://example.com")).toBeNull();
+  });
+
+  it("trims surrounding whitespace before validating", () => {
+    expect(validateUrlToShorten("  https://example.com  ")).toBeNull();
+  });
+
+  it("asks for a URL when the input is empty or whitespace", () => {
+    expect(validateUrlToShorten("")).toBe("Please enter a URL.");
+    expect(validateUrlToShorten("   ")).toBe("Please enter a URL.");
+  });
+
+  it("requires an http(s) scheme when one is missing", () => {
+    expect(validateUrlToShorten("example.com")).toBe("URL must start with http:// or https://");
+  });
+
+  it("rejects non-http(s) schemes", () => {
+    expect(validateUrlToShorten("ftp://example.com")).toBe("URL must start with http:// or https://");
+    expect(validateUrlToShorten("javascript:alert(1)")).toBe("URL must start with http:// or https://");
   });
 });
 

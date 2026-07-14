@@ -63,6 +63,31 @@ export function extractApiErrorMessage(error: unknown, fallback: string): string
   return fallback;
 }
 
+/**
+ * Client-side validation for the shorten form. Returns an error message to
+ * display, or null when the URL is acceptable. Mirrors the server's http(s)-only
+ * rule (ADR 008) so the user gets instant feedback before the request.
+ */
+export function validateUrlToShorten(value: string): string | null {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return "Please enter a URL.";
+  }
+
+  let parsed: URL;
+  try {
+    parsed = new URL(trimmed);
+  } catch {
+    return "URL must start with http:// or https://";
+  }
+
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    return "URL must start with http:// or https://";
+  }
+
+  return null;
+}
+
 export async function hashPassword(plaintextPassword: string): Promise<string> {
   const saltRounds = 10;
   const hashedPassword = await bcrypt.hash(plaintextPassword, saltRounds);
