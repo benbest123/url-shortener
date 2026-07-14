@@ -47,7 +47,7 @@ export default function ShortenForm({ onSuccess }: Props) {
       <form onSubmit={handleSubmit} noValidate className='space-y-4'>
         <div className='space-y-1'>
           <label htmlFor='originalUrl' className='text-sm font-medium text-zinc-700'>
-            Long URL
+            Paste your full URL
           </label>
           <input
             id='originalUrl'
@@ -61,16 +61,12 @@ export default function ShortenForm({ onSuccess }: Props) {
             }}
             placeholder='https://example.com/very/long/url'
             aria-invalid={error ? true : undefined}
-            aria-describedby='originalUrl-hint'
+            aria-describedby={error ? "originalUrl-error" : undefined}
             className='w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-zinc-500 focus:outline-none focus:ring-2 focus:ring-zinc-500/20'
           />
-          {error ? (
-            <p id='originalUrl-hint' className='text-sm text-red-600'>
+          {error && (
+            <p id='originalUrl-error' className='text-sm text-red-600'>
               {error}
-            </p>
-          ) : (
-            <p id='originalUrl-hint' className='text-xs text-zinc-500'>
-              Must start with http:// or https://
             </p>
           )}
         </div>
