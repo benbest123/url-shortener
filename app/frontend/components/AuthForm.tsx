@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { extractApiErrorMessage } from "@/lib/utils";
 
 type Props = {
   action: string;
@@ -30,7 +31,7 @@ export default function AuthForm({ action, submitLabel, pendingLabel, fallbackEr
 
     if (!response.ok) {
       const data = await response.json().catch(() => ({}));
-      setError(typeof data.error === "string" ? data.error : fallbackError);
+      setError(extractApiErrorMessage(data.error, fallbackError));
       setLoading(false);
       return;
     }
