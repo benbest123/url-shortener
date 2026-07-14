@@ -1,5 +1,7 @@
 # Snip
 
+[![codecov](https://codecov.io/gh/benbest123/url-shortener/graph/badge.svg)](https://codecov.io/gh/benbest123/url-shortener)
+
 A URL shortener. Paste a long link, get a short one back; visiting the short link
 redirects you. Behind a login, so links are owned by whoever created them.
 
@@ -104,3 +106,7 @@ Planned, roughly in order:
 - **CI/CD** — currently tests and coverage run on PRs; extend to auto-deploy on merge.
 
 Full detail in [`docs/PLAN.md`](docs/PLAN.md).
+
+## License
+
+[MIT](LICENSE)
