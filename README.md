@@ -10,6 +10,8 @@ work through a full stack end to end — HTTP redirects, a real database with ha
 SQL, auth, and eventually caching and analytics. The emphasis is on understanding each
 piece rather than reaching for a framework that hides it.
 
+![Snip — shortening a URL and the list of saved links](docs/images/home.png)
+
 ## Stack
 
 - **Next.js** (App Router) + **React** + **TypeScript**
