@@ -1,29 +1,29 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { NextRequest } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 
 vi.mock("@/lib/db", () => ({ query: vi.fn() }));
 vi.mock("@/lib/utils", () => ({
   generateShortCode: vi.fn(() => "abc1234"),
   shortUrl: vi.fn((base: string, code: string) => `${base}/${code}`),
 }));
-vi.mock("@/lib/auth", () => ({ getUserIdFromCookie: vi.fn() }));
+vi.mock("@/lib/auth", () => ({ requireUserId: vi.fn() }));
 
 import { POST } from "./route";
 import { query } from "@/lib/db";
-import { getUserIdFromCookie } from "@/lib/auth";
+import { requireUserId } from "@/lib/auth";
 
 const mockQuery = vi.mocked(query);
-const mockGetUserIdFromCookie = vi.mocked(getUserIdFromCookie);
+const mockRequireUserId = vi.mocked(requireUserId);
 
 describe("POST /api/urls", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     process.env.NEXT_PUBLIC_BASE_URL = "https://test.url";
-    mockGetUserIdFromCookie.mockReturnValue("user-1");
+    mockRequireUserId.mockReturnValue("user-1");
   });
 
   it("returns 401 when the request is unauthenticated", async () => {
-    mockGetUserIdFromCookie.mockReturnValue(null);
+    mockRequireUserId.mockReturnValue(NextResponse.json({ error: "unauthorized" }, { status: 401 }));
 
     const req = new NextRequest("http://localhost/api/urls", {
       method: "POST",
@@ -51,6 +51,20 @@ describe("POST /api/urls", () => {
 
     expect(res.status).toBe(400);
     expect(body.error).toBe("invalid url or expiration date");
+  });
+
+  it("returns 400 for a non-http(s) URL scheme", async () => {
+    for (const url of ["javascript:alert(1)", "ftp://example.com/file", "data:text/html,hi"]) {
+      const req = new NextRequest("http://localhost/api/urls", {
+        method: "POST",
+        body: JSON.stringify({ url }),
+        headers: { "Content-Type": "application/json" },
+      });
+
+      const res = await POST(req);
+      expect(res.status).toBe(400);
+    }
+    expect(mockQuery).not.toHaveBeenCalled();
   });
 
   it("returns 400 when URL is missing from request body", async () => {
@@ -178,5 +192,39 @@ describe("POST /api/urls", () => {
 
     expect(res.status).toBe(500);
     expect(body.error).toBe("failed to create short URL");
+  });
+
+  it("retries with a new short code on a unique-constraint collision", async () => {
+    mockQuery
+      .mockRejectedValueOnce({ code: "23505" })
+      .mockResolvedValueOnce([{ short_code: "abc1234", created_at: new Date("2024-01-01T00:00:00Z") }]);
+
+    const req = new NextRequest("http://localhost/api/urls", {
+      method: "POST",
+      body: JSON.stringify({ url: "https://example.com" }),
+      headers: { "Content-Type": "application/json" },
+    });
+
+    const res = await POST(req);
+
+    expect(res.status).toBe(201);
+    expect(mockQuery).toHaveBeenCalledTimes(2);
+  });
+
+  it("returns 500 after exhausting short-code retries on repeated collisions", async () => {
+    mockQuery.mockRejectedValue({ code: "23505" });
+
+    const req = new NextRequest("http://localhost/api/urls", {
+      method: "POST",
+      body: JSON.stringify({ url: "https://example.com" }),
+      headers: { "Content-Type": "application/json" },
+    });
+
+    const res = await POST(req);
+    const body = await res.json();
+
+    expect(res.status).toBe(500);
+    expect(body.error).toBe("failed to create short URL");
+    expect(mockQuery).toHaveBeenCalledTimes(5);
   });
 });

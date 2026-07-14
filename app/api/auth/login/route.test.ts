@@ -2,21 +2,23 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 
 vi.mock("@/lib/db", () => ({ query: vi.fn() }));
-vi.mock("bcryptjs", () => ({
-  default: { compare: vi.fn() },
+vi.mock("@/lib/utils", () => ({
+  verifyPassword: vi.fn(),
+  DUMMY_PASSWORD_HASH: "dummy-hash",
 }));
-vi.mock("@/lib/auth", () => ({
+vi.mock("@/lib/auth", async importOriginal => ({
+  ...(await importOriginal<typeof import("@/lib/auth")>()),
   signJwtToken: vi.fn(() => "jwt-token"),
   setAuthCookie: vi.fn(),
 }));
 
 import { POST } from "./route";
 import { query } from "@/lib/db";
-import bcrypt from "bcryptjs";
+import { verifyPassword } from "@/lib/utils";
 import { setAuthCookie, signJwtToken } from "@/lib/auth";
 
 const mockQuery = vi.mocked(query);
-const mockCompare = vi.mocked(bcrypt.compare as (...args: [string, string]) => Promise<boolean>);
+const mockVerifyPassword = vi.mocked(verifyPassword);
 const mockSignJwtToken = vi.mocked(signJwtToken);
 const mockSetAuthCookie = vi.mocked(setAuthCookie);
 
@@ -71,8 +73,9 @@ describe("POST /api/auth/login", () => {
     expect(body.error).toBe("invalid email or password");
   });
 
-  it("returns 401 when user is not found", async () => {
+  it("returns 401 and still runs a compare when the user is not found (timing equalization)", async () => {
     mockQuery.mockResolvedValueOnce([]);
+    mockVerifyPassword.mockResolvedValueOnce(false);
 
     const req = new NextRequest("http://localhost/api/auth/login", {
       method: "POST",
@@ -85,12 +88,13 @@ describe("POST /api/auth/login", () => {
 
     expect(res.status).toBe(401);
     expect(body.error).toBe("invalid email or password");
-    expect(mockCompare).not.toHaveBeenCalled();
+    // Compares against the dummy hash so latency does not leak account existence.
+    expect(mockVerifyPassword).toHaveBeenCalledWith("Password!1", "dummy-hash");
   });
 
   it("returns 401 when password does not match", async () => {
     mockQuery.mockResolvedValueOnce([{ id: "user-1", password_hash: "stored-hash" }]);
-    mockCompare.mockResolvedValueOnce(false);
+    mockVerifyPassword.mockResolvedValueOnce(false);
 
     const req = new NextRequest("http://localhost/api/auth/login", {
       method: "POST",
@@ -107,7 +111,7 @@ describe("POST /api/auth/login", () => {
 
   it("returns 200 and sets auth cookie on success", async () => {
     mockQuery.mockResolvedValueOnce([{ id: "user-1", password_hash: "stored-hash" }]);
-    mockCompare.mockResolvedValueOnce(true);
+    mockVerifyPassword.mockResolvedValueOnce(true);
 
     const req = new NextRequest("http://localhost/api/auth/login", {
       method: "POST",
@@ -120,8 +124,24 @@ describe("POST /api/auth/login", () => {
 
     expect(res.status).toBe(200);
     expect(body).toEqual({ success: true, message: "Logged in successfully" });
+    expect(mockVerifyPassword).toHaveBeenCalledWith("Password!1", "stored-hash");
     expect(mockSignJwtToken).toHaveBeenCalledWith("user-1", "test-secret");
     expect(mockSetAuthCookie).toHaveBeenCalledWith("jwt-token");
+  });
+
+  it("normalizes the email to lowercase before lookup", async () => {
+    mockQuery.mockResolvedValueOnce([{ id: "user-1", password_hash: "stored-hash" }]);
+    mockVerifyPassword.mockResolvedValueOnce(true);
+
+    const req = new NextRequest("http://localhost/api/auth/login", {
+      method: "POST",
+      body: JSON.stringify({ email: "Test@Example.COM", password: "Password!1" }),
+      headers: { "Content-Type": "application/json" },
+    });
+
+    await POST(req);
+
+    expect(mockQuery).toHaveBeenCalledWith("SELECT id, password_hash FROM users WHERE email = $1", ["test@example.com"]);
   });
 
   it("returns 500 for unexpected DB error", async () => {

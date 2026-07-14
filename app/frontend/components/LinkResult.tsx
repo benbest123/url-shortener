@@ -1,3 +1,5 @@
+import ExternalLinkIcon from "./ExternalLinkIcon";
+
 type Props = {
   shortUrl: string | null;
 };
@@ -18,21 +20,7 @@ export default function LinkResult({ shortUrl }: Props) {
         aria-label='Open short URL'
         className='shrink-0 rounded-lg border border-zinc-200 bg-white p-1.5 text-zinc-500 transition-colors hover:bg-zinc-50 hover:text-zinc-900'
       >
-        <svg
-          xmlns='http://www.w3.org/2000/svg'
-          className='h-4 w-4'
-          viewBox='0 0 24 24'
-          fill='none'
-          stroke='currentColor'
-          strokeWidth='2'
-          strokeLinecap='round'
-          strokeLinejoin='round'
-          aria-hidden='true'
-        >
-          <path d='M15 3h6v6' />
-          <path d='M10 14 21 3' />
-          <path d='M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6' />
-        </svg>
+        <ExternalLinkIcon />
       </a>
     </div>
   );

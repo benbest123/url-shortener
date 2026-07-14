@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import bcrypt from "bcryptjs";
-import { extractApiErrorMessage, generateShortCode, hashPassword } from "./utils";
+import { extractApiErrorMessage, generateShortCode, hashPassword, verifyPassword } from "./utils";
 
 describe("generateShortCode", () => {
   it("returns a string of length 7", () => {
@@ -15,6 +15,35 @@ describe("generateShortCode", () => {
   it("returns a different value on each call", () => {
     const codes = new Set(Array.from({ length: 100 }, () => generateShortCode()));
     expect(codes.size).toBe(100);
+  });
+
+  it("distributes characters roughly uniformly (no modulo bias)", () => {
+    const counts = new Map<string, number>();
+    for (let i = 0; i < 5000; i++) {
+      for (const ch of generateShortCode()) {
+        counts.set(ch, (counts.get(ch) ?? 0) + 1);
+      }
+    }
+    // 62-char alphabet; every character should appear given 35k samples.
+    expect(counts.size).toBe(62);
+    const frequencies = [...counts.values()];
+    const min = Math.min(...frequencies);
+    const max = Math.max(...frequencies);
+    // With uniform sampling the spread stays modest; the old `% 62` bias made
+    // a-h ~25% more likely, which this bound would catch.
+    expect(max / min).toBeLessThan(1.5);
+  });
+});
+
+describe("verifyPassword", () => {
+  it("returns true for a matching password", async () => {
+    const hash = await hashPassword("Password!1");
+    expect(await verifyPassword("Password!1", hash)).toBe(true);
+  });
+
+  it("returns false for a non-matching password", async () => {
+    const hash = await hashPassword("Password!1");
+    expect(await verifyPassword("wrong-password", hash)).toBe(false);
   });
 });
 
