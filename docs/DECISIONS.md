@@ -62,3 +62,30 @@
 **Date:** 14 July 2026
 **Decision:** (a) Login always runs a bcrypt compare — against a dummy hash when the email is unknown — so response latency does not reveal whether an account exists. (b) `jwt.verify` pins `algorithms: ["HS256"]`. (c) A missing `JWT_SECRET` is treated as a 500 (server misconfiguration) everywhere, including the auth-guarded routes, rather than a silent 401.
 **Reason:** Closes a user-enumeration timing side-channel on login, removes JWT algorithm-confusion as a class of risk, and makes a misconfigured deploy fail loudly and consistently instead of masquerading as "everyone is logged out." Note the register route's `409 "email already in use"` still leaks account existence directly; that is accepted for now as the cost of a usable signup error, and revisiting it (e.g. generic messaging + email verification) is out of scope.
+
+## ADR 011 — cap the pg pool at one connection per serverless instance
+
+**Context.** `lib/db.ts` builds a `pg.Pool` at module scope. That assumes one
+long-lived process. On Vercel the app runs as many short-lived, concurrent
+function instances; each evaluates the module and opens its own pool. With
+`pg`'s default `max: 10`, N instances can demand 10N connections against a
+database that accepts far fewer. The failure is load-dependent, so it does not
+appear in local development or in tests.
+
+**Decision.** Two parts:
+
+1. Point `DATABASE_URL` at Neon's **pooled** endpoint (the `-pooler` host),
+   which fronts Postgres with PgBouncer and absorbs many short-lived clients.
+2. Set `max: 1`. An instance serves one request at a time, so pooling within an
+   instance buys nothing and only multiplies the connection count. Connection
+   reuse is PgBouncer's job now, not `pg`'s.
+
+TLS is set explicitly (`ssl: { rejectUnauthorized: true }`) when the connection
+string carries `sslmode=require`, rather than relying on `pg` to interpret the
+URL — its handling of `sslmode` has varied across versions, and a silent
+downgrade is worse than a loud failure.
+
+**Consequences.** Local development is unaffected (no `sslmode` in the local
+URL, and one connection is plenty). If Snip ever moves back to a long-lived
+server, `max: 1` becomes a bottleneck and must be revisited — the setting is a
+consequence of the serverless runtime, not a general preference.
