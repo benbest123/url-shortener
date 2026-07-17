@@ -7,6 +7,7 @@ import { z } from "zod";
 
 const MAX_SHORT_CODE_ATTEMPTS = 5;
 const DEFAULT_EXPIRY_DAYS = 30;
+const LINKS_PER_HOUR_LIMIT = 20;
 
 const UrlSchema = z.object({
   url: z.url().refine(isHttpUrl, { message: "url must use http or https" }),
@@ -42,6 +43,28 @@ export async function POST(req: NextRequest) {
   }
 
   const { url, expiresAt } = parsed.data;
+
+  // Registration is open so visitors can exercise the real signup flow, so an
+  // account is not a barrier to a script. Cap creation per user instead
+  // (ADR 012). Postgres-backed until Redis lands in Phase 6.
+  try {
+    const counted = await query<{ count: string }>(
+      "SELECT count(*) FROM urls WHERE user_id = $1 AND created_at > NOW() - INTERVAL '1 hour'",
+      [userId],
+    );
+
+    // `count(*)` comes back as a string: it is bigint, which does not fit a JS
+    // number safely, so `pg` refuses to guess.
+    if (Number(counted[0].count) >= LINKS_PER_HOUR_LIMIT) {
+      return NextResponse.json(
+        { error: `rate limit exceeded — max ${LINKS_PER_HOUR_LIMIT} links per hour` },
+        { status: 429 },
+      );
+    }
+  } catch (err) {
+    console.error("Failed to check the creation rate limit", err);
+    return NextResponse.json({ error: "failed to create short URL" }, { status: 500 });
+  }
 
   // Retry on the (rare) short_code UNIQUE collision with a fresh code rather
   // than surfacing it as a 500.

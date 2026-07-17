@@ -89,3 +89,29 @@ downgrade is worse than a loud failure.
 URL, and one connection is plenty). If Snip ever moves back to a long-lived
 server, `max: 1` becomes a bottleneck and must be revisited — the setting is a
 consequence of the serverless runtime, not a general preference.
+
+## ADR 012 — cap link creation per user, in Postgres
+
+**Context.** Deploying publicly makes Snip an abuse target — phishing and spam
+redirects, which risk the Vercel account under the Hobby terms and any future
+domain's reputation. ADR 006 requires auth to create links, which stops
+drive-by abuse, but registration stays open so a visitor can exercise the real
+signup flow. An account is therefore not a barrier to a script.
+
+**Decision.** Cap creation at 20 links per rolling hour per user, counted with
+`SELECT count(*) FROM urls WHERE user_id = $1 AND created_at > NOW() - INTERVAL
+'1 hour'`, rejected with `429`. Paired with a 30-day default expiry, which caps
+the useful life of anything that does get through.
+
+Postgres rather than Redis: Upstash does not arrive until Phase 6, and one
+indexed count per creation is cheap. Revisit if creation ever gets hot — it is
+one extra round trip on the write path.
+
+A count error fails **closed** (`500`), not open: an unavailable database would
+fail the insert regardless, and failing open would let anything that can break
+the query bypass the limiter.
+
+**Consequences.** The number is a guard rail, not a product decision —
+generous for a human, ruinous for a script. It is not a global rate limit: a
+determined abuser can register more accounts. Real defence (Safe Browsing,
+per-IP limits) is deferred until Snip has a domain worth protecting.
