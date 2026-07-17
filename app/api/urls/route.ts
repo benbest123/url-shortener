@@ -6,6 +6,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
 const MAX_SHORT_CODE_ATTEMPTS = 5;
+const DEFAULT_EXPIRY_DAYS = 30;
 
 const UrlSchema = z.object({
   url: z.url().refine(isHttpUrl, { message: "url must use http or https" }),
@@ -47,9 +48,11 @@ export async function POST(req: NextRequest) {
   for (let attempt = 0; attempt < MAX_SHORT_CODE_ATTEMPTS; attempt++) {
     const shortCode = generateShortCode();
     try {
-      const res = await query<{ short_code: string; created_at: Date }>(
-        "INSERT INTO urls (short_code, original_url, expires_at, user_id) VALUES ($1, $2, $3, $4) RETURNING short_code, created_at",
-        [shortCode, url, expiresAt, userId],
+      const res = await query<{ short_code: string; created_at: Date; expires_at: Date }>(
+        `INSERT INTO urls (short_code, original_url, expires_at, user_id)
+         VALUES ($1, $2, COALESCE($3::timestamptz, NOW() + make_interval(days => $5)), $4)
+         RETURNING short_code, created_at, expires_at`,
+        [shortCode, url, expiresAt, userId, DEFAULT_EXPIRY_DAYS],
       );
 
       return NextResponse.json(
@@ -58,7 +61,7 @@ export async function POST(req: NextRequest) {
           shortUrl: shortUrl(baseUrl, shortCode),
           originalUrl: url,
           createdAt: res[0].created_at,
-          expiresAt: expiresAt ?? null,
+          expiresAt: res[0].expires_at,
         },
         { status: 201 },
       );

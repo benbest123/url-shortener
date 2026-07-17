@@ -93,7 +93,10 @@ describe("POST /api/urls", () => {
 
   it("returns 201 with short link data on success", async () => {
     const createdAt = new Date("2024-01-01T00:00:00Z");
-    mockQuery.mockResolvedValueOnce([{ short_code: "abc1234", created_at: createdAt }]);
+    const expiresAt = new Date("2024-01-31T00:00:00Z");
+    mockQuery.mockResolvedValueOnce([
+      { short_code: "abc1234", created_at: createdAt, expires_at: expiresAt },
+    ]);
 
     const req = new NextRequest("http://localhost/api/urls", {
       method: "POST",
@@ -110,18 +113,20 @@ describe("POST /api/urls", () => {
       shortUrl: "https://test.url/abc1234",
       originalUrl: "https://example.com",
       createdAt: createdAt.toISOString(),
-      expiresAt: null,
+      expiresAt: expiresAt.toISOString(),
     });
     expect(mockQuery).toHaveBeenCalledWith(
-      "INSERT INTO urls (short_code, original_url, expires_at, user_id) VALUES ($1, $2, $3, $4) RETURNING short_code, created_at",
-      ["abc1234", "https://example.com", undefined, "user-1"],
+      expect.stringContaining("COALESCE($3::timestamptz, NOW() + make_interval(days => $5))"),
+      ["abc1234", "https://example.com", undefined, "user-1", 30],
     );
   });
 
   it("includes expiresAt in the response when provided", async () => {
     const createdAt = new Date("2024-01-01T00:00:00Z");
     const expiresAt = "2099-12-31T00:00:00.000Z";
-    mockQuery.mockResolvedValueOnce([{ short_code: "abc1234", created_at: createdAt }]);
+    mockQuery.mockResolvedValueOnce([
+      { short_code: "abc1234", created_at: createdAt, expires_at: new Date(expiresAt) },
+    ]);
 
     const req = new NextRequest("http://localhost/api/urls", {
       method: "POST",
@@ -197,7 +202,13 @@ describe("POST /api/urls", () => {
   it("retries with a new short code on a unique-constraint collision", async () => {
     mockQuery
       .mockRejectedValueOnce({ code: "23505" })
-      .mockResolvedValueOnce([{ short_code: "abc1234", created_at: new Date("2024-01-01T00:00:00Z") }]);
+      .mockResolvedValueOnce([
+        {
+          short_code: "abc1234",
+          created_at: new Date("2024-01-01T00:00:00Z"),
+          expires_at: new Date("2024-01-31T00:00:00Z"),
+        },
+      ]);
 
     const req = new NextRequest("http://localhost/api/urls", {
       method: "POST",
