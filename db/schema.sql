@@ -19,6 +19,13 @@ CREATE TABLE urls (
   expires_at TIMESTAMPTZ NULL
 );
 
+-- Supports the per-user creation rate limit (ADR 012), which counts a user's
+-- links in the last hour on every insert: WHERE user_id = $1 AND created_at >
+-- NOW() - INTERVAL '1 hour'. Without this the count is a sequential scan of the
+-- whole table per link creation; the composite (user_id, created_at) lets it be
+-- an index range scan. Leading column user_id also serves the per-user link list.
+CREATE INDEX idx_urls_user_created ON urls (user_id, created_at);
+
 CREATE TABLE clicks (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   url_id UUID REFERENCES urls(id) ON DELETE CASCADE,
