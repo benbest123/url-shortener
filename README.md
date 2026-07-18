@@ -2,6 +2,17 @@
 
 [![codecov](https://codecov.io/gh/benbest123/url-shortener/graph/badge.svg)](https://codecov.io/gh/benbest123/url-shortener)
 
+**[Try it live →](https://snip-iota.vercel.app)**
+
+Sign in with the demo account — no registration needed:
+
+| Email | Password |
+|---|---|
+| `demo@snip.example` | `snip-demo-2026` |
+
+Registration is open if you'd rather make your own account. Links default to a 30-day
+expiry, and creation is capped at 20 per hour per user.
+
 A URL shortener. Paste a long link, get a short one back; visiting the short link
 redirects you. Behind a login, so links are owned by whoever created them.
 
@@ -20,6 +31,7 @@ piece rather than reaching for a framework that hides it.
 - **JWT** auth in an httpOnly cookie, passwords hashed with `bcryptjs`
 - **Tailwind** for styling
 - **Vitest** for tests
+- **Vercel** (hosting) + **Neon** (serverless Postgres) in production
 
 ## Local setup
 
@@ -94,18 +106,24 @@ API shape.
 
 ## Roadmap
 
-Built so far: core redirects, the Postgres data model, creating and listing links, and
-user auth.
+Built so far: core redirects, the Postgres data model, creating and listing links,
+user auth, and **deployment** — live on Vercel with Neon Postgres, deploying
+automatically on merge to `main`.
+
+Deployment was brought forward from Phase 9 to run first
+([spec](docs/superpowers/specs/2026-07-17-deploy-design.md)): nothing in the intervening
+phases was a prerequisite, and shipping first means click tracking gathers real data while
+caching is built — so the analytics dashboard renders real traffic rather than
+self-generated clicks.
 
 Planned, roughly in order:
 
 - **Click tracking** — record device, referrer, and timestamp on each redirect,
   asynchronously so it doesn't slow the redirect down.
-- **Caching** — Redis in front of Postgres for redirect lookups (read-heavy workload).
+- **Caching** — Redis (Upstash) in front of Postgres for redirect lookups. Neon scales to
+  zero on the free tier, so a cold redirect pays a wake-up penalty this removes.
 - **Analytics dashboard** — click counts over time, by device and referrer.
-- **Dockerise** — app + Postgres + Redis via Docker Compose, plus DB migrations.
-- **Deploy** — a real host behind Nginx with HTTPS.
-- **CI/CD** — currently tests and coverage run on PRs; extend to auto-deploy on merge.
+- **Dockerise** — app + Postgres + Redis via Docker Compose for local development.
 
 Full detail in [`docs/PLAN.md`](docs/PLAN.md).
 
