@@ -12,7 +12,7 @@ describe("buildPoolConfig", () => {
     const config = buildPoolConfig("postgresql://localhost/snip");
 
     expect(config.connectionString).toBe("postgresql://localhost/snip");
-    expect(config.connectionTimeoutMillis).toBe(3000);
+    expect(config.connectionTimeoutMillis).toBe(10000);
   });
 
   it("enables verified TLS when the connection string requires SSL", () => {

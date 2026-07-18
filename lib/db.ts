@@ -13,7 +13,10 @@ import { Pool, type PoolConfig } from "pg";
 export function buildPoolConfig(connectionString: string | undefined): PoolConfig {
   const config: PoolConfig = {
     connectionString,
-    connectionTimeoutMillis: 3000,
+    // 10s, not the pg default: Neon's free tier scales to zero after idle,
+    // and waking it can exceed a few seconds. A timeout here throws rather
+    // than just being slow, so it must outlast a cold start.
+    connectionTimeoutMillis: 10000,
     max: 1,
   };
 
